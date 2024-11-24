@@ -1,17 +1,30 @@
 package jwt
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/golang-jwt/jwt/v4"
 
+	"github.com/golang-jwt/jwt/v4"
 )
 
-type GlobalJWTMiddleware struct {
-	Secret string
-}
+type (
+	GlobalJWTMiddleware struct {
+		Secret string
+	}
+	GlobalResponse struct {
+		Message string `json:"message"`
+		Body 	any 	`json:"body"`
+	}
+	ErrorResponseStruct struct {
+		Error   error   `json:"error"`
+		Message string `json:"message"`
+		Status  int    `json:"status,omitempty"` 
+	}
+)
 
 
 func NewJWTMiddleware(secrectKey *string ) *GlobalJWTMiddleware{
@@ -76,4 +89,37 @@ func (j * GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 		
 		next.ServeHTTP(w, r)
 	})
+}
+
+func JSONResponse(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if data != nil {
+		json.NewEncoder(w).Encode(data)
+	}
+}
+
+
+func ErrorResponse(w http.ResponseWriter, status int, message string, err  error) {
+	new  := func(message string, status int ) *ErrorResponseStruct{
+		return &ErrorResponseStruct{
+			Error: err,
+			Status:  status,
+			Message: message,
+		}
+	}
+	JSONResponse(w, status, new)
+}
+
+
+func ParseBody(r http.Request, target any) error {
+	if r.Body == nil {
+		return errors.New("request body is null")
+	}
+
+	err := json.NewDecoder(r.Body).Decode(target) 
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil 
 }
