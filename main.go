@@ -17,19 +17,18 @@ type (
 	}
 	GlobalResponse struct {
 		Message string `json:"message"`
-		Body 	any 	`json:"body"`
+		Body    any    `json:"body"`
 	}
 	ErrorResponseStruct struct {
-		Error   error   `json:"error"`
+		Error   error  `json:"error"`
 		Message string `json:"message"`
-		Status  int    `json:"status,omitempty"` 
+		Status  int    `json:"status"`
 	}
 )
 
-
-func NewJWTMiddleware(secrectKey *string ) *GlobalJWTMiddleware{
+func NewJWTMiddleware(secretKey string) *GlobalJWTMiddleware {
 	return &GlobalJWTMiddleware{
-		Secret: *secrectKey,
+		Secret: secretKey,
 	}
 }
 
@@ -37,7 +36,6 @@ type JWTManager struct {
 	SecretKey     string
 	TokenDuration time.Duration
 }
-
 
 func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
 	return &JWTManager{
@@ -48,13 +46,15 @@ func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
 
 func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID,                     
-		"exp": time.Now().Add(j.TokenDuration).Unix(), 
-		"iat": time.Now().Unix(),    
+		"sub": userID,
+		"exp": time.Now().Add(j.TokenDuration).Unix(),
+		"iat": time.Now().Unix(),
 	}
+
 	for key, value := range customClaims {
 		claims[key] = value
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(j.SecretKey))
 }
@@ -62,26 +62,44 @@ func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (
 func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" { 
-			http.Error(w, "Missing the Authorization Header", http.StatusUnauthorized)
+		if authHeader == "" {
+			http.Error(w, "Missing Authorization Header", http.StatusUnauthorized)
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Missing the Bearer Token", http.StatusUnauthorized)
+			http.Error(w, "Missing Bearer Token", http.StatusUnauthorized)
 			return
 		}
 
 		tokenString := parts[1]
-		_, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Method.Alg())
 			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return nil, fmt.Errorf("could not extract claims")
+			}
+
+			if exp, ok := claims["exp"].(float64); ok {
+				if time.Now().Unix() > int64(exp) {
+					return nil, fmt.Errorf("token has expired")
+				}
+			}
+
 			return []byte(j.Secret), nil
 		})
 
 		if err != nil {
+			http.Error(w, "Invalid or Expired Token", http.StatusUnauthorized)
+			return
+		}
+
+		if !token.Valid {
 			http.Error(w, "Invalid Token", http.StatusUnauthorized)
 			return
 		}
@@ -90,36 +108,32 @@ func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	})
 }
 
-
 func JSONResponse(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if data != nil {
-		json.NewEncoder(w).Encode(data)
-	}
-}
-
-
-func ErrorResponse(w http.ResponseWriter, status int, message string, err  error) {
-	new  := func(message string, status int ) *ErrorResponseStruct{
-		return &ErrorResponseStruct{
-			Error: err,
-			Status:  status,
-			Message: message,
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		}
 	}
-	JSONResponse(w, status, new)
 }
 
+func ErrorResponse(w http.ResponseWriter, status int, message string, err error) {
+	response := &ErrorResponseStruct{
+		Error:   err,
+		Status:  status,
+		Message: message,
+	}
+	JSONResponse(w, status, response)
+}
 
-func ParseBody(r http.Request, target any) error {
+func ParseBody(r *http.Request, target any) error {
 	if r.Body == nil {
 		return errors.New("request body is null")
 	}
 
-	err := json.NewDecoder(r.Body).Decode(target) 
-	if err != nil {
-		return errors.New(err.Error())
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		return fmt.Errorf("error decoding request body: %v", err)
 	}
-	return nil 
+	return nil
 }
