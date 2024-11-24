@@ -63,13 +63,13 @@ func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (
 func (j * GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == " "{
+		if authHeader == ""{
 			http.Error(w, "Missing the Authorization Header",http.StatusUnauthorized)
 			return 
 		}
 		
 		parts := strings.Split(authHeader," ")
-		if len(parts)  != 2 || parts[1] != "Bearer" {
+		if len(parts)  != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Missing the Bearer Token", http.StatusBadGateway)
 			return 
 		}
