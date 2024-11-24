@@ -1,8 +1,12 @@
-Here's the updated documentation with the `go get` command included:
+### **Why I Built This**
 
+`Swan_lib` was created to help Go developers handle JWT authentication, CORS, and common API tasks easily when working with `net/http`. I built this because, while working on my own microservice for a portfolio project, I found myself repeating the same code too often. Instead of getting frustrated, I wrote this library to save time, reduce complexity, and focus on the actual business logic.
+
+I haved tested the JWT middleware and I believe also the CORS will work
 ---
 
 ### Available Methods in `swan_lib`
+
 
 Here’s a quick rundown of what `swan_lib` offers to simplify your API development with `net/http`:
 
@@ -68,7 +72,3 @@ go get github.com/SwanHtetAungPhyo/swan_lib
 ```
 
 ---
-
-### **Why I Built This**
-
-`Swan_lib` was created to help Go developers handle JWT authentication, CORS, and common API tasks easily when working with `net/http`. I built this because, while working on my own microservice for a portfolio project, I found myself repeating the same code too often. Instead of getting frustrated, I wrote this library to save time, reduce complexity, and focus on the actual business logic.
