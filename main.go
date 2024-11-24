@@ -59,23 +59,22 @@ func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (
 	return token.SignedString([]byte(j.SecretKey))
 }
 
-
-func (j * GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
+func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == ""{
-			http.Error(w, "Missing the Authorization Header",http.StatusUnauthorized)
-			return 
+		if authHeader == "" { 
+			http.Error(w, "Missing the Authorization Header", http.StatusUnauthorized)
+			return
 		}
-		
-		parts := strings.Split(authHeader," ")
-		if len(parts)  != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Missing the Bearer Token", http.StatusBadGateway)
-			return 
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Missing the Bearer Token", http.StatusUnauthorized)
+			return
 		}
 
 		tokenString := parts[1]
-		_, err := jwt.Parse(tokenString, func (token *jwt.Token) (any, error) {
+		_, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Method.Alg())
 			}
@@ -86,10 +85,11 @@ func (j * GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 			http.Error(w, "Invalid Token", http.StatusUnauthorized)
 			return
 		}
-		
+
 		next.ServeHTTP(w, r)
 	})
 }
+
 
 func JSONResponse(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
