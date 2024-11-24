@@ -1,4 +1,4 @@
-package jwt
+package swan_lib
 
 import (
 	"encoding/json"
