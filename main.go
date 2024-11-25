@@ -108,11 +108,18 @@ func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	})
 }
 
-func JSONResponse(w http.ResponseWriter, status int, data any) {
+func JSONResponse(w http.ResponseWriter, status int, message string, data any) {
+	var jsonResponseObj = func(message string, data any) *GlobalResponse {
+		return &GlobalResponse{
+			Message: message,
+			Body:    data,
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+
 	if data != nil {
-		if err := json.NewEncoder(w).Encode(data); err != nil {
+		if err := json.NewEncoder(w).Encode(jsonResponseObj); err != nil {
 			http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		}
 	}
@@ -124,7 +131,7 @@ func ErrorResponse(w http.ResponseWriter, status int, message string, err error)
 		Status:  status,
 		Message: message,
 	}
-	JSONResponse(w, status, response)
+	JSONResponse(w, status, "", response)
 }
 
 func ParseBody(r *http.Request, target any) error {
