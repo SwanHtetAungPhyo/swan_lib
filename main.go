@@ -1,8 +1,6 @@
 package swan_lib
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,54 +9,21 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-type (
-	GlobalJWTMiddleware struct {
-		Secret string
-	}
-	GlobalResponse struct {
-		Message string `json:"message"`
-		Body    any    `json:"body"`
-	}
-	ErrorResponseStruct struct {
-		Error   error  `json:"error"`
-		Message string `json:"message"`
-		Status  int    `json:"status"`
-	}
-)
+// GlobalJWTMiddleware handles JWT authentication in HTTP requests. It validates the JWT token in the
+// Authorization header of incoming requests and ensures that only requests with valid tokens can access protected routes.
+type GlobalJWTMiddleware struct {
+	Secret string // The secret key used for signing JWT tokens
+}
 
+// NewJWTMiddleware creates a new instance of GlobalJWTMiddleware with the provided secret key.
 func NewJWTMiddleware(secretKey string) *GlobalJWTMiddleware {
 	return &GlobalJWTMiddleware{
 		Secret: secretKey,
 	}
 }
 
-type JWTManager struct {
-	SecretKey     string
-	TokenDuration time.Duration
-}
-
-func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
-	return &JWTManager{
-		SecretKey:     secretKey,
-		TokenDuration: duration,
-	}
-}
-
-func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (string, error) {
-	claims := jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(j.TokenDuration).Unix(),
-		"iat": time.Now().Unix(),
-	}
-
-	for key, value := range customClaims {
-		claims[key] = value
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(j.SecretKey))
-}
-
+// Authorize is a middleware function that checks if the incoming request contains a valid JWT token
+// in the Authorization header. If the token is missing, invalid, or expired, it responds with a 401 Unauthorized error.
 func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -108,39 +73,34 @@ func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	})
 }
 
-func JSONResponse(w http.ResponseWriter, status int, message string, data any) {
-	var jsonResponseObj = func(message string, data any) *GlobalResponse {
-		return &GlobalResponse{
-			Message: message,
-			Body:    data,
-		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+// JWTManager provides methods to generate and manage JWT tokens.
+type JWTManager struct {
+	SecretKey     string        // Secret key used for signing the JWT tokens
+	TokenDuration time.Duration // Duration for which the JWT token is valid
+}
 
-	if data != nil {
-		if err := json.NewEncoder(w).Encode(jsonResponseObj); err != nil {
-			http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		}
+// NewJWTManager creates and returns a new instance of JWTManager with the specified secret key and token duration.
+func NewJWTManager(secretKey string, duration time.Duration) *JWTManager {
+	return &JWTManager{
+		SecretKey:     secretKey,
+		TokenDuration: duration,
 	}
 }
 
-func ErrorResponse(w http.ResponseWriter, status int, message string, err error) {
-	response := &ErrorResponseStruct{
-		Error:   err,
-		Status:  status,
-		Message: message,
-	}
-	JSONResponse(w, status, "", response)
-}
-
-func ParseBody(r *http.Request, target any) error {
-	if r.Body == nil {
-		return errors.New("request body is null")
+// GenerateToken creates a new JWT token for the given userID and custom claims.
+// The token will be signed with the secret key and will expire after the specified TokenDuration.
+func (j *JWTManager) GenerateToken(userID string, customClaims map[string]any) (string, error) {
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(j.TokenDuration).Unix(),
+		"iat": time.Now().Unix(),
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
-		return fmt.Errorf("error decoding request body: %v", err)
+	// Adding custom claims to the token
+	for key, value := range customClaims {
+		claims[key] = value
 	}
-	return nil
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(j.SecretKey))
 }
