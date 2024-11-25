@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/valyala/fasthttp"
 	"net/http"
 	"strings"
 	"time"
@@ -108,6 +109,55 @@ func (j *GlobalJWTMiddleware) Authorize(next http.Handler) http.Handler {
 	})
 }
 
+func (j *GlobalJWTMiddleware) FastAuthorize(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
+
+		authHeader := string(ctx.Request.Header.Peek("Authorization"))
+		if authHeader == "" {
+			ctx.Error("Missing Authorization Header", fasthttp.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			ctx.Error("Missing Bearer Token", fasthttp.StatusUnauthorized)
+			return
+		}
+
+		tokenString := parts[1]
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Method.Alg())
+			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return nil, fmt.Errorf("could not extract claims")
+			}
+
+			if exp, ok := claims["exp"].(float64); ok {
+				if time.Now().Unix() > int64(exp) {
+					return nil, fmt.Errorf("token has expired")
+				}
+			}
+
+			return []byte(j.Secret), nil
+		})
+
+		if err != nil {
+			ctx.Error("Invalid or Expired Token", fasthttp.StatusUnauthorized)
+			return
+		}
+
+		if !token.Valid {
+			ctx.Error("Invalid Token", fasthttp.StatusUnauthorized)
+			return
+		}
+
+		next(ctx)
+	}
+}
 func JSONResponse(w http.ResponseWriter, status int, message string, data any) {
 	var jsonResponseObj = func(message string, data any) *GlobalResponse {
 		return &GlobalResponse{
