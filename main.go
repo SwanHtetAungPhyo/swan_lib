@@ -174,17 +174,6 @@ func JSONResponse(w http.ResponseWriter, status int, message string, data any) {
 		}
 	}
 }
-package swan_lib
-
-import (
-	"fmt"
-	"strings"
-	"time"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v4"
-)
-
 func (j *GlobalJWTMiddleware) FiberAuthorize() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 
