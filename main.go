@@ -174,6 +174,70 @@ func JSONResponse(w http.ResponseWriter, status int, message string, data any) {
 		}
 	}
 }
+package swan_lib
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v4"
+)
+
+func (j *GlobalJWTMiddleware) FiberAuthorize() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing Authorization Header"})
+		}
+
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing Bearer Token"})
+		}
+
+		tokenString := parts[1]
+
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Method.Alg())
+			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return nil, fmt.Errorf("could not extract claims")
+			}
+
+
+			if exp, ok := claims["exp"].(float64); ok {
+				if time.Now().Unix() > int64(exp) {
+					return nil, fmt.Errorf("token has expired")
+				}
+			}
+
+
+			return []byte(j.Secret), nil
+		})
+
+	
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid or Expired Token"})
+		}
+
+
+		if !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid Token"})
+		}
+
+	
+		return c.Next()
+	}
+}
 
 func ErrorResponse(w http.ResponseWriter, status int, message string, err error) {
 	response := &ErrorResponseStruct{
